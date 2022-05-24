@@ -1,5 +1,6 @@
 package hochenchong.timer.controller;
 
+import hochenchong.timer.web.HelloController;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
