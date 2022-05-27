@@ -7,16 +7,12 @@ import org.springframework.util.StringUtils;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 /**
  * 屏蔽字工具类
  *    TODO 待完成内容
  *      1. 目前匹配是按最短的匹配字匹配，应该改为可配置，可匹配最长的，还是最短的
- *      2. 提供方法，返回所有符合的屏蔽字内容
  * @author hochenchong
  */
 @SuppressWarnings({ "rawtypes", "unchecked" })
@@ -45,11 +41,11 @@ public class SensitiveWordUtils {
     /**
      * 判断校验的文本是否需要屏蔽的内容
      *
-     * @param txt 要校验的文本
+     * @param text 要校验的文本
      * @return true：有，false：没有
      */
-    public static boolean hasSensitiveWord(String txt) {
-        char[] chars = txt.toLowerCase().toCharArray();
+    public static boolean hasSensitiveWord(String text) {
+        char[] chars = text.toLowerCase().toCharArray();
         int i = 0;
         while (i < chars.length) {
             int len = checkSensitiveWord(chars, i);
@@ -64,31 +60,30 @@ public class SensitiveWordUtils {
     /**
      * 查找校验的文本是否包含屏蔽字，并将屏蔽字替换为 *
      *
-     * @param txt 要校验的文本
+     * @param text 要校验的文本
      * @return 返回处理过屏蔽字的文本
      */
-    public static String searchSensitiveWordAndReplace(String txt) {
-        return searchSensitiveWordAndReplace(txt, REPLACE_CHAR);
+    public static String searchSensitiveWordAndReplace(String text) {
+        return searchSensitiveWordAndReplace(text, REPLACE_CHAR);
     }
 
     /**
      * 查找校验的文本是否包含屏蔽字，并将屏蔽字替换为对应的字符
      *
-     * @param txt 要校验的文本
+     * @param text 要校验的文本
      * @param replaceChar 替换的字符
      * @return 返回处理过屏蔽字的文本
      */
-    public static String searchSensitiveWordAndReplace(String txt, char replaceChar) {
+    public static String searchSensitiveWordAndReplace(String text, char replaceChar) {
         int i = 0;
 
-        StringBuilder sb = new StringBuilder(txt);
-        char[] chars = txt.toLowerCase().toCharArray();
+        StringBuilder sb = new StringBuilder(text);
+        char[] chars = text.toLowerCase().toCharArray();
         while (i < chars.length) {
             int len = checkSensitiveWord(chars, i);
             if (len > 0) {
                 for (int j = 0; j < len; j++) {
-                    sb.setCharAt(i+j, replaceChar
-                    );
+                    sb.setCharAt(i+j, replaceChar);
                 }
                 i += len;
             } else {
@@ -96,6 +91,39 @@ public class SensitiveWordUtils {
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * 找出需要校验文本，匹配到的所有屏蔽字
+     *
+     * @param text 要校验的文本
+     * @return 屏蔽字列表
+     */
+    public static List<String> searchAllSensitiveWords(String text) {
+        List<String> allSensitiveWords = new ArrayList<>();
+        char[] chars = text.toLowerCase().toCharArray();
+        int i = 0;
+        while (i < chars.length) {
+            List<Integer> lens = checkAllSensitiveWord(chars, i);
+            i++;
+            // 如果没有匹配到到长度，则直接返回
+            if (lens == null) {
+                continue;
+            }
+            // 拼接屏蔽字列表，规律，后面到字符串包含前面的字符
+            StringBuilder sb = new StringBuilder();
+            // 保险起见，排个序，从小到大
+            lens = lens.stream().sorted().toList();
+            for (int j = 0; j < lens.size(); j++) {
+                for (int k = sb.length(); k < lens.get(j); k++) {
+                    // 这里需要 -1，前面 i++ 了
+                    sb.append(chars[i + k - 1]);
+                }
+                allSensitiveWords.add(sb.toString());
+            }
+        }
+        // 可能会有重复，需要去重
+        return allSensitiveWords.stream().distinct().toList();
     }
 
     /**
@@ -209,20 +237,54 @@ public class SensitiveWordUtils {
         for (int i = beginIndex; i < size; i++) {
             char c = chars[i];
             HashMap temp = (HashMap) curMap.get(c);
-            if (temp != null) {
-                if (Boolean.TRUE == temp.get(END_FLAG)) {
-                    flag = true;
-                } else {
-                    curMap = temp;
-                }
-                len++;
-            } else {
+            // 如果为空，则跳出循环
+            if (temp == null) {
                 break;
             }
+            // 如果获取标识为 true，则代表匹配到屏蔽字，
+            if (Boolean.TRUE == temp.get(END_FLAG)) {
+                flag = true;
+            } else {
+                curMap = temp;
+            }
+            len++;
         }
         if (!flag) {
             len = 0;
         }
         return len;
+    }
+
+    /**
+     * 从文本的第几位下标开始校验是否有符合的屏蔽字
+     *
+     * @param chars 要校验的文本
+     * @param beginIndex 下标，从 0 开始
+     * @return 返回屏蔽字的长度列表，所有匹配到的都返回
+     */
+    private static List<Integer> checkAllSensitiveWord(char[] chars, int beginIndex) {
+        int len = 0;
+        HashMap curMap = sensitiveWordMap;
+        List<Integer> list = null;
+
+        int size = chars.length;
+        for (int i = beginIndex; i < size; i++) {
+            char c = chars[i];
+            HashMap temp = (HashMap) curMap.get(c);
+            // 如果为空，则跳出循环
+            if (temp == null) {
+                break;
+            }
+            len++;
+            // 如果获取标识为 true，则代表匹配到屏蔽字，长度加入列表
+            if (Boolean.TRUE == temp.get(END_FLAG)) {
+                if (list == null) {
+                    list = new ArrayList<>();
+                }
+                list.add(len);
+            }
+            curMap = temp;
+        }
+        return list;
     }
 }
