@@ -53,11 +53,10 @@ public class SensitiveWordUtils {
         char[] chars = text.toLowerCase().toCharArray();
         int i = 0;
         while (i < chars.length) {
-            int len = checkSensitiveWord(chars, i);
-            if (len > 0) {
+            if (checkSensitiveWord(chars, i) > 0) {
                 return true;
             }
-            ++i;
+            i++;
         }
         return false;
     }
@@ -104,18 +103,17 @@ public class SensitiveWordUtils {
      */
     public static String searchSensitiveWordAndReplace(String text, char replaceChar, SensitiveWordMatchType matchType) {
         int i = 0;
-
         StringBuilder sb = new StringBuilder(text);
         char[] chars = text.toLowerCase().toCharArray();
         while (i < chars.length) {
             int len = checkSensitiveWord(chars, i, matchType);
             if (len > 0) {
                 for (int j = 0; j < len; j++) {
-                    sb.setCharAt(i+j, replaceChar);
+                    sb.setCharAt(i + j, replaceChar);
                 }
                 i += len;
             } else {
-                ++i;
+                i++;
             }
         }
         return sb.toString();
@@ -138,7 +136,7 @@ public class SensitiveWordUtils {
             if (lens == null) {
                 continue;
             }
-            // 拼接屏蔽字列表，规律，后面到字符串包含前面的字符
+            // 拼接屏蔽字列表，规律：后面到字符串包含前面的字符
             StringBuilder sb = new StringBuilder();
             // 保险起见，排个序，从小到大
             lens = lens.stream().sorted().toList();
