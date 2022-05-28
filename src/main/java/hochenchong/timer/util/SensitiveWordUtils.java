@@ -1,5 +1,6 @@
 package hochenchong.timer.util;
 
+import hochenchong.timer.constant.SensitiveWordMatchType;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
@@ -11,9 +12,9 @@ import java.util.*;
 
 /**
  * 屏蔽字工具类
- *    TODO 待完成内容
- *      1. 目前匹配是按最短的匹配字匹配，应该改为可配置，可匹配最长的，还是最短的
+ *
  * @author hochenchong
+ * @since 2022-05-27
  */
 @SuppressWarnings({ "rawtypes", "unchecked" })
 public class SensitiveWordUtils {
@@ -37,6 +38,10 @@ public class SensitiveWordUtils {
      * 屏蔽字文件的最后修改日期，以此判断是否需要重新加载（类似于 Unix make 逻辑，《UNIX传奇：历史与回忆》）
      */
     private static long lastModifiedTime = -1;
+    /**
+     * 默认的匹配规则，匹配较小的
+     */
+    private static final SensitiveWordMatchType DEFAULT_MATCH_TYPE = SensitiveWordMatchType.MATCH_SHORTER;
 
     /**
      * 判断校验的文本是否需要屏蔽的内容
@@ -64,7 +69,7 @@ public class SensitiveWordUtils {
      * @return 返回处理过屏蔽字的文本
      */
     public static String searchSensitiveWordAndReplace(String text) {
-        return searchSensitiveWordAndReplace(text, REPLACE_CHAR);
+        return searchSensitiveWordAndReplace(text, REPLACE_CHAR, DEFAULT_MATCH_TYPE);
     }
 
     /**
@@ -75,12 +80,35 @@ public class SensitiveWordUtils {
      * @return 返回处理过屏蔽字的文本
      */
     public static String searchSensitiveWordAndReplace(String text, char replaceChar) {
+        return searchSensitiveWordAndReplace(text, replaceChar, DEFAULT_MATCH_TYPE);
+    }
+
+    /**
+     * 查找校验的文本是否包含屏蔽字，并将屏蔽字替换为 *
+     *
+     * @param text 要校验的文本
+     * @param matchType 匹配类型
+     * @return 返回处理过屏蔽字的文本
+     */
+    public static String searchSensitiveWordAndReplace(String text, SensitiveWordMatchType matchType) {
+        return searchSensitiveWordAndReplace(text, REPLACE_CHAR, matchType);
+    }
+
+    /**
+     * 查找校验的文本是否包含屏蔽字，并将屏蔽字替换为对应的字符
+     *
+     * @param text 要校验的文本
+     * @param replaceChar 替换的字符
+     * @param matchType 匹配类型
+     * @return 返回处理过屏蔽字的文本
+     */
+    public static String searchSensitiveWordAndReplace(String text, char replaceChar, SensitiveWordMatchType matchType) {
         int i = 0;
 
         StringBuilder sb = new StringBuilder(text);
         char[] chars = text.toLowerCase().toCharArray();
         while (i < chars.length) {
-            int len = checkSensitiveWord(chars, i);
+            int len = checkSensitiveWord(chars, i, matchType);
             if (len > 0) {
                 for (int j = 0; j < len; j++) {
                     sb.setCharAt(i+j, replaceChar);
@@ -114,8 +142,8 @@ public class SensitiveWordUtils {
             StringBuilder sb = new StringBuilder();
             // 保险起见，排个序，从小到大
             lens = lens.stream().sorted().toList();
-            for (int j = 0; j < lens.size(); j++) {
-                for (int k = sb.length(); k < lens.get(j); k++) {
+            for (Integer len : lens) {
+                for (int k = sb.length(); k < len; k++) {
                     // 这里需要 -1，前面 i++ 了
                     sb.append(chars[i + k - 1]);
                 }
@@ -229,11 +257,23 @@ public class SensitiveWordUtils {
      * @return 返回屏蔽字的长度，大于 0 代表有屏蔽字
      */
     private static int checkSensitiveWord(char[] chars, int beginIndex) {
-        boolean flag = false;
-        int len = 0;
-        HashMap curMap = sensitiveWordMap;
+        return checkSensitiveWord(chars, beginIndex, DEFAULT_MATCH_TYPE);
+    }
 
+    /**
+     * 从文本的第几位下标开始校验是否有符合的屏蔽字
+     *
+     * @param chars 要校验的文本
+     * @param beginIndex 下标，从 0 开始
+     * @param matchType 匹配模式，返回较长屏蔽字，还是较短屏蔽字
+     * @return 返回屏蔽字的长度，大于 0 代表有屏蔽字
+     */
+    private static int checkSensitiveWord(char[] chars, int beginIndex, SensitiveWordMatchType matchType) {
+        int sensitiveWordLen = 0;
+
+        HashMap curMap = sensitiveWordMap;
         int size = chars.length;
+        int len = 0;
         for (int i = beginIndex; i < size; i++) {
             char c = chars[i];
             HashMap temp = (HashMap) curMap.get(c);
@@ -241,18 +281,18 @@ public class SensitiveWordUtils {
             if (temp == null) {
                 break;
             }
-            // 如果获取标识为 true，则代表匹配到屏蔽字，
-            if (Boolean.TRUE == temp.get(END_FLAG)) {
-                flag = true;
-            } else {
-                curMap = temp;
-            }
             len++;
+            // 如果获取标识为 true，则代表匹配到屏蔽字
+            if (Boolean.TRUE == temp.get(END_FLAG)) {
+                // 如果只要匹配较短的屏蔽字，则直接跳出循环，否则继续循环
+                if (matchType == SensitiveWordMatchType.MATCH_SHORTER) {
+                    return len;
+                }
+                sensitiveWordLen = len;
+            }
+            curMap = temp;
         }
-        if (!flag) {
-            len = 0;
-        }
-        return len;
+        return sensitiveWordLen;
     }
 
     /**
