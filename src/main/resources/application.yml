@@ -12,3 +12,8 @@ spring:
       max-lifetime: 540000
       connection-timeout: 60000
       connection-test-query: select 1
+
+hochenchong:
+  timer:
+    scheduled:
+      cron: 1 * * * * ?
